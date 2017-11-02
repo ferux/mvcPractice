@@ -6,11 +6,8 @@ import (
 	"log"
 	"net"
 	"net/http"
-	"os"
 
 	"github.com/ferux/mvcPractice/db"
-
-	"net/http/pprof"
 
 	"github.com/ferux/mvcPractice/model/client"
 	"github.com/ferux/mvcPractice/model/item"
@@ -27,6 +24,7 @@ import (
 type Config struct {
 	ListenIP   string
 	ListenPort string
+	ExternalIP string
 }
 
 var dbConn *sqlx.DB
@@ -50,57 +48,12 @@ func Run(c Config, dbc *sqlx.DB) {
 	appendDelete(r)
 	appendEdit(r)
 	appendView(r)
-	attachProfiler(r)
-	r.HandleFunc("/info", handleInfo).Methods("GET")
 	log.Printf("Launching server at: %s", listenString)
 	r.PathPrefix("/static/").Handler(http.StripPrefix("/static/", http.FileServer(http.Dir("../view/build/"))))
 	headersOk := handlers.AllowedHeaders([]string{"Origin", "Content-Type", "X-Auth-Token", "Accept", "X-Requested-With"})
-	originsOk := handlers.AllowedOrigins([]string{getFrontendURL()})
+	originsOk := handlers.AllowedOrigins([]string{c.ExternalIP})
 	methodsOk := handlers.AllowedMethods([]string{"GET", "HEAD", "POST", "PUT", "DELETE", "OPTIONS"})
 	log.Fatal(http.Serve(listener, handlers.CORS(headersOk, originsOk, methodsOk)(r)))
-}
-
-func attachProfiler(router *mux.Router) {
-	router.HandleFunc("/debug/pprof/", pprof.Index)
-	router.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
-	router.HandleFunc("/debug/pprof/profile", pprof.Profile)
-	router.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
-
-	// Manually add support for paths linked to by index page at /debug/pprof/
-	router.Handle("/debug/pprof/goroutine", pprof.Handler("goroutine"))
-	router.Handle("/debug/pprof/heap", pprof.Handler("heap"))
-	router.Handle("/debug/pprof/threadcreate", pprof.Handler("threadcreate"))
-	router.Handle("/debug/pprof/block", pprof.Handler("block"))
-}
-
-func addCors(w http.ResponseWriter) {
-	frontendURL := getFrontendURL()
-	w.Header().Set("Access-Control-Allow-Origin", frontendURL)
-	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, PUT, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers", "Origin, Content-Type, X-Auth-Token, Accept, X-Requested-With")
-}
-
-func handleInfo(w http.ResponseWriter, r *http.Request) {
-	info := make(map[string]interface{})
-	addrs, err := net.InterfaceAddrs()
-	if err != nil {
-		log.Println("Got an error retriving ip addresses", err)
-	} else {
-		for _, a := range addrs {
-			if ipnet, ok := a.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
-				if ipnet.IP.To4() != nil {
-					info["myip"] = ipnet.IP.String()
-				}
-			}
-		}
-		info["ips"] = addrs
-	}
-	info["host"], _ = os.Hostname()
-	fmt.Fprintf(w, "%#v", info)
-}
-
-func getFrontendURL() string {
-	return os.Getenv("EXT_IP")
 }
 
 func appendView(r *mux.Router) {
@@ -163,7 +116,6 @@ func appendCreate(r *mux.Router) {
 
 //Views
 func handleCartView(w http.ResponseWriter, r *http.Request) {
-	addCors(w)
 	log.Println("[Get] CartView")
 	vars := mux.Vars(r)
 	id, err := uuid.Parse(vars["id"])
@@ -180,7 +132,6 @@ func handleCartView(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(thisRow)
 }
 func handleCartsView(w http.ResponseWriter, r *http.Request) {
-	addCors(w)
 	rows, err := cart.Read(dbConn)
 	if err != nil {
 		http.Error(w, "Something wrong with this.\n"+err.Error(), http.StatusBadRequest)
@@ -191,7 +142,6 @@ func handleCartsView(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleClientView(w http.ResponseWriter, r *http.Request) {
-	addCors(w)
 	vars := mux.Vars(r)
 	id, err := uuid.Parse(vars["id"])
 	if err != nil {
@@ -207,7 +157,6 @@ func handleClientView(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(thisRow)
 }
 func handleClientsView(w http.ResponseWriter, r *http.Request) {
-	addCors(w)
 	rows, err := client.Read(dbConn)
 	if err != nil {
 		http.Error(w, "Something wrong with this.\n"+err.Error(), http.StatusBadRequest)
@@ -218,7 +167,6 @@ func handleClientsView(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleItemView(w http.ResponseWriter, r *http.Request) {
-	addCors(w)
 	vars := mux.Vars(r)
 	id, err := uuid.Parse(vars["id"])
 	if err != nil {
@@ -234,7 +182,6 @@ func handleItemView(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(thisRow)
 }
 func handleItemsView(w http.ResponseWriter, r *http.Request) {
-	addCors(w)
 	rows, err := item.Read(dbConn)
 	if err != nil {
 		http.Error(w, "Something wrong with this.\n"+err.Error(), http.StatusBadRequest)
@@ -245,7 +192,6 @@ func handleItemsView(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleOrderView(w http.ResponseWriter, r *http.Request) {
-	addCors(w)
 	vars := mux.Vars(r)
 	id, err := uuid.Parse(vars["id"])
 	if err != nil {
@@ -260,7 +206,6 @@ func handleOrderView(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(thisRow)
 }
 func handleOrdersView(w http.ResponseWriter, r *http.Request) {
-	addCors(w)
 	rows, err := order.Read(dbConn)
 	if err != nil {
 		http.Error(w, "Something wrong with this.\n"+err.Error(), http.StatusBadRequest)
@@ -271,7 +216,6 @@ func handleOrdersView(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleItemTypesView(w http.ResponseWriter, r *http.Request) {
-	addCors(w)
 	log.Println("[ItemTypes] View")
 	types, err := item.GetItemTypes(dbConn)
 	if err != nil {
@@ -284,7 +228,6 @@ func handleItemTypesView(w http.ResponseWriter, r *http.Request) {
 
 //Edits
 func handleCartEdit(w http.ResponseWriter, r *http.Request) {
-	addCors(w)
 	log.Println("[POST] CartEdit")
 	vars := mux.Vars(r)
 	thisObject := cart.Cart{}
@@ -309,7 +252,6 @@ func handleCartEdit(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleClientEdit(w http.ResponseWriter, r *http.Request) {
-	addCors(w)
 	log.Println("[POST] ClientEdit")
 	vars := mux.Vars(r)
 	thisObject := client.Client{}
@@ -334,7 +276,6 @@ func handleClientEdit(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleClientsEdit(w http.ResponseWriter, r *http.Request) {
-	addCors(w)
 	log.Println("[POST] ClientsEdit")
 	var this []client.Client
 	if err := json.NewDecoder(r.Body).Decode(&this); err != nil {
@@ -349,7 +290,6 @@ func handleClientsEdit(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleItemEdit(w http.ResponseWriter, r *http.Request) {
-	addCors(w)
 	log.Println("[POST] ItemEdit")
 	vars := mux.Vars(r)
 	thisObject := item.Item{}
@@ -374,7 +314,6 @@ func handleItemEdit(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, "OK")
 }
 func handleItemsEdit(w http.ResponseWriter, r *http.Request) {
-	addCors(w)
 	log.Println("[POST] ItemsEdit")
 	var this []item.Item
 	if err := json.NewDecoder(r.Body).Decode(&this); err != nil {
@@ -389,7 +328,6 @@ func handleItemsEdit(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleOrderEdit(w http.ResponseWriter, r *http.Request) {
-	addCors(w)
 	log.Println("[POST] OrderEdit")
 	vars := mux.Vars(r)
 	thisObject := order.Order{}
@@ -414,7 +352,6 @@ func handleOrderEdit(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, "OK")
 }
 func handleOrdersEdit(w http.ResponseWriter, r *http.Request) {
-	addCors(w)
 	log.Println("[POST] Orders")
 	var this []order.Order
 	if err := json.NewDecoder(r.Body).Decode(&this); err != nil {
@@ -430,7 +367,6 @@ func handleOrdersEdit(w http.ResponseWriter, r *http.Request) {
 
 //Delete
 func handleCartDelete(w http.ResponseWriter, r *http.Request) {
-	addCors(w)
 	vars := mux.Vars(r)
 	id, err := uuid.Parse(vars["id"])
 	if err != nil {
@@ -446,7 +382,6 @@ func handleCartDelete(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, "OK")
 }
 func handleClientDelete(w http.ResponseWriter, r *http.Request) {
-	addCors(w)
 	vars := mux.Vars(r)
 	id, err := uuid.Parse(vars["id"])
 	if err != nil {
@@ -463,7 +398,6 @@ func handleClientDelete(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleClientsDelete(w http.ResponseWriter, r *http.Request) {
-	addCors(w)
 	log.Println("[DELETE] Clients")
 	var ids []uuid.UUID
 
@@ -482,7 +416,6 @@ func handleClientsDelete(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleItemDelete(w http.ResponseWriter, r *http.Request) {
-	addCors(w)
 	vars := mux.Vars(r)
 	id, err := uuid.Parse(vars["id"])
 	if err != nil {
@@ -498,7 +431,6 @@ func handleItemDelete(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, "OK")
 }
 func handleItemsDelete(w http.ResponseWriter, r *http.Request) {
-	addCors(w)
 	log.Println("[DELETE] Items")
 	var ids []uuid.UUID
 
@@ -517,7 +449,6 @@ func handleItemsDelete(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleOrderDelete(w http.ResponseWriter, r *http.Request) {
-	addCors(w)
 	vars := mux.Vars(r)
 	id, err := uuid.Parse(vars["id"])
 	if err != nil {
@@ -534,7 +465,6 @@ func handleOrderDelete(w http.ResponseWriter, r *http.Request) {
 
 }
 func handleOrdersDelete(w http.ResponseWriter, r *http.Request) {
-	addCors(w)
 	log.Println("[DELETE] Orders")
 	var ids []uuid.UUID
 
@@ -554,7 +484,6 @@ func handleOrdersDelete(w http.ResponseWriter, r *http.Request) {
 
 //Create
 func handleCartCreate(w http.ResponseWriter, r *http.Request) {
-	addCors(w)
 	r.ParseForm()
 	var thisObject cart.Cart
 	if err := json.NewDecoder(r.Body).Decode(&thisObject); err != nil {
@@ -572,7 +501,6 @@ func handleCartCreate(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleClientCreate(w http.ResponseWriter, r *http.Request) {
-	addCors(w)
 	r.ParseForm()
 	var thisObject client.Client
 	if err := json.NewDecoder(r.Body).Decode(&thisObject); err != nil {
@@ -589,7 +517,6 @@ func handleClientCreate(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, "OK")
 }
 func handleClientsCreate(w http.ResponseWriter, r *http.Request) {
-	addCors(w)
 	log.Println("[CREATE] Clients")
 	var requestData []client.Client
 
@@ -608,7 +535,6 @@ func handleClientsCreate(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleItemCreate(w http.ResponseWriter, r *http.Request) {
-	addCors(w)
 	r.ParseForm()
 	var thisObject item.Item
 	if err := json.NewDecoder(r.Body).Decode(&thisObject); err != nil {
@@ -625,7 +551,6 @@ func handleItemCreate(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, "OK")
 }
 func handleItemsCreate(w http.ResponseWriter, r *http.Request) {
-	addCors(w)
 	log.Println("[CREATE] Items")
 	var requestData []item.Item
 
@@ -644,7 +569,6 @@ func handleItemsCreate(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleOrderCreate(w http.ResponseWriter, r *http.Request) {
-	addCors(w)
 	r.ParseForm()
 	var thisObject order.Order
 	if err := json.NewDecoder(r.Body).Decode(&thisObject); err != nil {
@@ -661,7 +585,6 @@ func handleOrderCreate(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, "OK")
 }
 func handleOrdersCreate(w http.ResponseWriter, r *http.Request) {
-	addCors(w)
 	log.Println("[CREATE] Orders")
 	var requestData []order.Order
 

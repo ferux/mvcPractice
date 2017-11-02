@@ -30,19 +30,21 @@ const (
 )
 
 type config struct {
-	ip, port, dbAddr, dbPort, user, pwd, dbName, driver string
+	ip, port, dbAddr, dbPort, user, pwd, dbName, driver, extIP string
 }
 
 func getParamsDocker() config {
-	var ip, port, dbAddr, dbPort, user, pwd, dbName, driver string
+	log.Println("Using docker params")
+	var ip, port, dbAddr, dbPort, user, pwd, dbName, driver, extIP string
 	flag.StringVar(&ip, "ip", "127.0.0.1", "Hosting IP")
 	flag.StringVar(&port, "port", "8080", "Hosting Port")
-	flag.StringVar(&dbAddr, "dbAddr", "127.0.0.1", "Database Address")
+	flag.StringVar(&dbAddr, "dbAddr", "127.0.0.1", "Database IP")
 	flag.StringVar(&dbPort, "dbPort", "5432", "Database Port")
 	flag.StringVar(&user, "user", "user", "Database User")
 	flag.StringVar(&pwd, "password", "pass", "Database Password")
 	flag.StringVar(&dbName, "db", "default", "Database Name")
 	flag.StringVar(&driver, "driver", "postgres", "Database driver")
+	flag.StringVar(&extIP, "extIp", "127.0.0.1", "External IP for CORS")
 	return config{
 		ip:     ip,
 		port:   port,
@@ -52,10 +54,12 @@ func getParamsDocker() config {
 		pwd:    pwd,
 		dbName: dbName,
 		driver: driver,
+		extIP:  extIP,
 	}
 }
 
 func getParamsAlone() config {
+	log.Println("Using console params")
 	ip := os.Getenv("IP")
 	port := os.Getenv("PORT")
 	dbAddr := os.Getenv("DB_IP")
@@ -63,6 +67,7 @@ func getParamsAlone() config {
 	user := os.Getenv("DB_USER")
 	pwd := os.Getenv("DB_PWD")
 	dbName := os.Getenv("DB")
+	extIP := os.Getenv("EXT_IP")
 	driver := "postgres"
 	return config{
 		ip:     ip,
@@ -73,22 +78,25 @@ func getParamsAlone() config {
 		pwd:    pwd,
 		dbName: dbName,
 		driver: driver,
+		extIP:  extIP,
 	}
 }
 
-var outsideDocker bool
+var outsideDocker string
 
 //In case of runnig application outside of docker change function from getParamsDocker to getParamsAlone
 func main() {
+	log.Printf("ousideDocker value: %v", outsideDocker)
 	var mainConfig config
-	if !outsideDocker {
-		mainConfig = getParamsAlone()
-	} else {
+	if outsideDocker == "false" {
 		mainConfig = getParamsDocker()
+	} else {
+		mainConfig = getParamsAlone()
 	}
 	conf := controller.Config{
 		ListenIP:   mainConfig.ip,
 		ListenPort: mainConfig.port,
+		ExternalIP: mainConfig.extIP,
 	}
 
 	ds := fmt.Sprintf(`%s://%s:%s@%s:%s/%s?sslmode=disable`,
